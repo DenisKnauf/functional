@@ -27,6 +27,7 @@ class Functional
 		push_method "value=%s(value)", &exe
 	end
 =end
+
 	def select &exe
 		push_method "%s(value)||next", &exe
 	end
