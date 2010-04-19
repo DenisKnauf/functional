@@ -9,7 +9,7 @@ class Functional
 	def push_method code, *args, &exe
 		name = "__meth_#{exe.object_id}"
 		define_singleton_method name, &exe
-		@stack.push [code % name]+args
+		@stack.push code % name
 		self
 	end
 
@@ -41,6 +41,6 @@ class Functional
 
 	def each &exe
 		return self  unless exe
-		@obj.send @func || :each, *@args, &eval( "lambda{|value|#{@stack.join( ";")};exe.call(value)}")
+		@obj.send @func||:each, *@args, &eval( "lambda{|value|#{@stack.join ";"};exe.call(value)}")
 	end
 end
