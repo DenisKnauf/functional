@@ -21,12 +21,15 @@ class Functional
 		push_method "value=%s(value)", &exe
 	end
 
-=begin
 	# map/reduce?
 	def map &exe
-		push_method "value=%s(value)", &exe
+		raise "Reserved for MapReduce."
 	end
-=end
+
+	# map/reduce?
+	def reduce &exe
+		raise "Reserved for MapReduce."
+	end
 
 	def select &exe
 		push_method "%s(value)||next", &exe
@@ -36,12 +39,8 @@ class Functional
 		push_method "%s(value)&&next", &exe
 	end
 
-	def each obj, &exe
-		return Enumerator.new self, :each, obj  unless exe
-		obj.each &eval( "lambda{|value|#{@stack.join( ";")};exe.call(value)}")
-	end
-
-	def inject obj, start, &exe
-		each( obj).inject start, &exe
+	def each &exe
+		return self  unless exe
+		@obj.send @func || :each, *@args, &eval( "lambda{|value|#{@stack.join( ";")};exe.call(value)}")
 	end
 end
