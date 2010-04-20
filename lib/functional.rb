@@ -6,10 +6,8 @@ class Functional
 		self.new.send meth, *args, &exe
 	end
 
-	def push_method code, *args, &exe
-		name = "__meth_#{exe.object_id}"
-		define_singleton_method name, &exe
-		@stack.push code % name
+	def push_method meth, *args, &exe
+		@stack.push [meth, exe]+args
 		self
 	end
 
@@ -18,12 +16,12 @@ class Functional
 	end
 
 	def collect &exe
-		push_method "value=%s(value)", &exe
+		push_method :collect, &exe
 	end
 
 	# map/reduce?
 	def map &exe
-		raise "Reserved for MapReduce."
+		push_method :map, &exe
 	end
 
 	# map/reduce?
@@ -32,15 +30,41 @@ class Functional
 	end
 
 	def select &exe
-		push_method "%s(value)||next", &exe
+		push_method :select, &exe
 	end
 
 	def delete_if &exe
-		push_method "%s(value)&&next", &exe
+		push_method :delete_if, &exe
+	end
+
+	def compact
+		push_method :compact
+	end
+
+	def together init, &exe
+		push_method :together, init, &exe
 	end
 
 	def each &exe
 		return self  unless exe
-		@obj.send @func||:each, *@args, &eval( "lambda{|value|#{@stack.join ";"};exe.call(value)}")
+		callstack = exe
+		@stack.reverse.each do |a|
+			m, e = *a[0..1]
+			pre = callstack
+			callstack = case m
+				when :collect   then lambda {|val| pre.call e.call( val) }
+				when :map       then lambda {|val| e.call( val).each &pre }
+				when :select    then lambda {|val| pre.call val  if e.call val }
+				when :delete_if then lambda {|val| pre.call val  unless e.call val }
+				when :compact   then lambda {|val| pre.call val  if val }
+				when :together
+					buf = a[2]
+					lambda {|val| if e.call val then pre.call buf; buf = a[2]+val else buf += val end }
+				else
+					$stderr.puts "Whats that? #{m.inspect}"
+					callstack
+				end
+		end
+		@obj.send @func||:each, *@args, &callstack
 	end
 end
