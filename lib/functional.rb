@@ -53,18 +53,25 @@ class Functional
 			pre = callstack
 			callstack = case m
 				when :collect   then lambda {|val| pre.call e.call( val) }
-				when :map       then lambda {|val| e.call( val).each &pre }
 				when :select    then lambda {|val| pre.call val  if e.call val }
 				when :delete_if then lambda {|val| pre.call val  unless e.call val }
 				when :compact   then lambda {|val| pre.call val  if val }
+				when :map       then lambda {|val| e.call( val).each &pre }
+				when :reduce
+					buf = {}
+					lambda {|val| buf[ val.first] = e.call( *val) }
 				when :together
-					buf = a[2]
-					lambda {|val| if e.call val then pre.call buf; buf = a[2]+val else buf += val end }
+					buf = a[2].dup
+					lambda {|val| if e.call val then pre.call buf; buf = a[2].dup+val else buf += val end }
 				else
 					$stderr.puts "Whats that? #{m.inspect}"
 					callstack
 				end
 		end
 		@obj.send @func||:each, *@args, &callstack
+	end
+
+	def p
+		each &Kernel.method( :p)
 	end
 end
