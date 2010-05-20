@@ -1,4 +1,25 @@
 
+class NotRegexp
+	def initialize r
+		@rx = r
+	end
+	def match l
+		! @rx.match( l)
+	end
+	def =~ l
+		! @rx =~ l
+	end
+	def -@
+		@rx
+	end
+end
+
+class Regexp
+	def -@
+		NotRegexp.new self
+	end
+end
+
 class Functional
 	include Enumerable
 
@@ -31,6 +52,10 @@ class Functional
 
 	def select &exe
 		push_method :select, &exe
+	end
+
+	def grep r
+		push_method :select, &r.method( :match)
 	end
 
 	def delete_if &exe
