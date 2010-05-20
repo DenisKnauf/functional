@@ -152,14 +152,12 @@ class Functional
 		push Collect.new( &exe)
 	end
 
-	# map/reduce?
-	def map &exe
-		push Map.new( &exe)
+	def map *a, &exe
+		raise "Reserved for MapReduce. Install TokyoCabinet, if you want to use it."
 	end
 
-	# map/reduce?
-	def reduce &exe
-		raise "Reserved for MapReduce."
+	def reduce *a, &exe
+		raise "Reserved for MapReduce. Install TokyoCabinet, if you want to use it."
 	end
 
 	def select &exe
@@ -187,8 +185,14 @@ class Functional
 	end
 
 	def each &exe
+		return self  unless exe
 		push Each.new
 		push exe
+		run
+	end
+
+	def join deli
+		push Inject.new('') {|i,j|i+deli+j}
 		run
 	end
 
@@ -200,4 +204,32 @@ class Functional
 	def p
 		each &Kernel.method( :p)
 	end
+end
+
+begin
+	require 'tokyocabinet'
+
+	class Functional
+		class Map <Base
+			class Emit < TokyoCabinet::BDB
+				alias emit putdup
+				alias call emit
+			end
+
+			def call *a
+				@exe.call( *a).each &@next.method(:call)
+			end
+		end
+
+		def map name, &e
+			push Map.new( name, &e)
+		end
+
+		def Reduce name, &e
+			push Reduce.new( name, &e)
+		end
+	end
+
+rescue MissingSourceFile
+	# TokyoCabinet not installed?
 end
