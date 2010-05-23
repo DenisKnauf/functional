@@ -1,22 +1,28 @@
 
-class NotRegexp
-	def initialize r
-		@rx = r
+class ::Regexp
+	class NegRegexp
+		def initialize r
+			@rx = r
+		end
+		def match l
+			! @rx.match( l)
+		end
+		def =~ l
+			! @rx =~ l
+		end
+		def -@
+			@rx
+		end
 	end
-	def match l
-		! @rx.match( l)
-	end
-	def =~ l
-		! @rx =~ l
-	end
+
 	def -@
-		@rx
+		NegRegexp.new self
 	end
 end
 
-class Regexp
-	def -@
-		NotRegexp.new self
+class ::Object
+	def functional meth = nil
+		Functional.new self, meth
 	end
 end
 
@@ -36,6 +42,10 @@ class Functional
 
 		def end
 			@next.end
+		end
+
+		def to_proc
+			method( :call).to_proc
 		end
 	end
 
@@ -137,6 +147,24 @@ class Functional
 		end
 	end
 
+	class Map <Collect
+		def call *a
+			@next.call *@exe.call(*a, &@next)
+		end
+	end
+
+	class Reduce <Base
+		def initialize *a, &e
+			super iv, *a, &e
+			@buf = {}
+			@buf.default = iv
+		end
+
+		def call *a
+			@buf[]
+		end
+	end
+
 	attr_accessor :next, :stack, :obj, :func, :args
 
 	def initialize obj = nil, func = nil, *args
@@ -153,11 +181,11 @@ class Functional
 	end
 
 	def map *a, &exe
-		raise "Reserved for MapReduce. Install TokyoCabinet, if you want to use it."
+		push Map.new( &exe)
 	end
 
 	def reduce *a, &exe
-		raise "Reserved for MapReduce. Install TokyoCabinet, if you want to use it."
+		raise "Reserved for MapReduce."
 	end
 
 	def select &exe
@@ -197,7 +225,7 @@ class Functional
 	end
 
 	def run
-		@obj.send @func||:each, *@args, &@next.method(:call)
+		@obj.send @func||:each, *@args, &@next #.method(:call)
 		@next.end
 	end
 
@@ -217,7 +245,7 @@ begin
 			end
 
 			def call *a
-				@exe.call( *a).each &@next.method(:call)
+				@exe.call( *a).each &@next
 			end
 		end
 
@@ -232,4 +260,4 @@ begin
 
 rescue MissingSourceFile
 	# TokyoCabinet not installed?
-end
+end  if false
