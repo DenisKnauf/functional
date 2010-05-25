@@ -24,6 +24,7 @@ class ::Object
 	def functional meth = nil
 		Functional.new self, meth
 	end
+	alias to_fun functional
 end
 
 class Functional
@@ -149,19 +150,24 @@ class Functional
 
 	class Map <Collect
 		def call *a
-			@next.call *@exe.call(*a, &@next)
+			@exe.call *a, &@next
 		end
 	end
 
 	class Reduce <Base
-		def initialize *a, &e
-			super iv, *a, &e
+		def initialize iv, *a, &e
+			super *a, &e
 			@buf = {}
 			@buf.default = iv
 		end
 
 		def call *a
-			@buf[]
+			@buf[ a[0]] = @exe.call @buf[ a[0]], *a[1..-1]
+		end
+
+		def end
+			@buf.each {|i| @next.call *i}
+			@next.end
 		end
 	end
 
@@ -180,12 +186,12 @@ class Functional
 		push Collect.new( &exe)
 	end
 
-	def map *a, &exe
+	def map &exe
 		push Map.new( &exe)
 	end
 
-	def reduce *a, &exe
-		raise "Reserved for MapReduce."
+	def reduce iv, &exe
+		push Reduce.new( iv, &exe)
 	end
 
 	def select &exe
@@ -230,7 +236,7 @@ class Functional
 	end
 
 	def p
-		each &Kernel.method( :p)
+		each {|*a|Kernel.p a}
 	end
 end
 
