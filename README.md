@@ -21,7 +21,7 @@ Usage
 				@i += @step
 			end
 		end
-  end
+	end
 	
 	Functional.new( Sequence.new).
 		select {|i| i.even? }.
