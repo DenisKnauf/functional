@@ -154,6 +154,12 @@ class Functional
 		end
 	end
 
+	class Flatten <Base
+		def call a
+			Array === a ? a.each( &method( :call)) : @next.call( a)
+		end
+	end
+
 	class Reduce <Base
 		def initialize iv, *a, &e
 			super *a, &e
@@ -216,6 +222,10 @@ class Functional
 
 	def topdown init, &exe
 		push TopDown.new( init, &exe)
+	end
+
+	def flatten
+		push Flatten.new
 	end
 
 	def each &exe
