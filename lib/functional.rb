@@ -186,7 +186,7 @@ class Functional
 	end
 
 	class Reduce <Base
-		def initialize iv, *a, &exe
+		def initialize iv, *a, &e
 			super *a, &e
 			@buf = {}
 			@buf.default = iv
