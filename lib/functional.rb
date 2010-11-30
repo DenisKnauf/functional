@@ -21,10 +21,30 @@ class ::Regexp
 end
 
 class ::Object
-	def functional meth = nil
+	def to_fun meth = nil
 		Functional.new self, meth
 	end
-	alias to_fun functional
+end
+
+class Counter
+	include Enumerable
+	attr_reader :c
+
+	def initialize first = nil, step = nil
+		@c, @step = first || 0, step || 1
+	end
+
+	def next; @c += @step end
+	def to_i; c.to_i end 
+	def to_f; c.to_f end
+
+	def + i
+		@c += @step*i
+	end
+
+	def each &e
+		loop { e.call self; self.next }
+	end
 end
 
 class Functional
@@ -43,6 +63,10 @@ class Functional
 
 		def end
 			@next.end
+		end
+
+		def clean
+			@next.clean
 		end
 
 		def to_proc
@@ -120,6 +144,7 @@ class Functional
 		def end
 			nil
 		end
+		alias :clean :end
 	end
 
 	class P <Each
@@ -130,15 +155,15 @@ class Functional
 
 	class Inject <Base
 		attr_reader :it
+		alias :end :it
+
 		def initialize start, *a, &e
 			super *a, &e
 			@it = start
 		end
+
 		def call *a
 			@it = @exe.call @it, *a
-		end
-		def end
-			@it
 		end
 	end
 
@@ -161,7 +186,7 @@ class Functional
 	end
 
 	class Reduce <Base
-		def initialize iv, *a, &e
+		def initialize iv, *a, &exe
 			super *a, &e
 			@buf = {}
 			@buf.default = iv
@@ -174,6 +199,80 @@ class Functional
 		def end
 			@buf.each {|i| @next.call *i}
 			@next.end
+		end
+	end
+
+	class Slice <Base
+		def initialize n
+			@buf, @n = [], n
+		end
+
+		def call *a
+			@buf.push a
+			unless @n > @buf.size
+				@next.call @buf
+				@buf.clear
+			end
+		end
+
+		def end
+			@next.call @buf
+			@next.end
+		end
+	end
+
+	class Cons <Base
+		def initialize n
+			@buf, @n = [], n
+		end
+
+		def call *a
+			@buf.push a
+		 	unless @n > @buf.size
+				class <<self
+					def call *a
+						@buf.push a
+						@next.call @buf
+						@buf.shift
+					end
+				end
+				@next.call @buf
+				@buf.shift
+			end
+		end
+
+		def end
+			@next.call @buf  unless @n > @buf.size
+			@next.end
+		end
+	end
+
+	class Pager <Base
+		def initialize *opts
+			@pager = IO.popen ENV['PAGER'] || 'less', 'w'
+			opts.each do |opt|
+				case opt.to_s
+				when *%w[inspect i] then alias call call_inspect
+				else raise ArgumentError, "Unknown opt: #{opt}"
+				end
+			end
+		end
+
+		def call_inspect *a
+			@pager.puts a.inspect
+		end
+
+		def call *a
+			@pager.puts a
+		end
+
+		def clean
+			@pager.close
+		end
+
+		def end
+			clean
+			nil
 		end
 	end
 
@@ -224,8 +323,9 @@ class Functional
 		push TopDown.new( init, &exe)
 	end
 
-	def flatten
+	def flatten &exe
 		push Flatten.new
+		push Collect.new( &exe)  if exe
 	end
 
 	def each &exe
@@ -243,37 +343,61 @@ class Functional
 	def run
 		@obj.send @func||:each, *@args, &@next #.method(:call)
 		@next.end
+	rescue Object
+		@next.clean
+		raise $!
 	end
 
 	def p
-		each {|*a|Kernel.p a}
+		each &Kernel.method( :p)
+	end
+
+	def pager *opts
+		push Pager.new( *opts)
+		run
+	end
+
+	def sort &exe
+		to_a.sort &exe
+	end
+
+	def sort_by &exe
+		to_a.sort_by &exe
+	end
+
+	# [ _A, _B, ..., _C, ..., _D ] ==> [ [0, _A], [1, _B], ..., [_I, _C], ..., [_N, _D]]
+	# [ [_A|_As], [_B|_Bs], ..., [_C|_Cs], ..., [_D|_Ds] ] ==> [ [0,_A|_As], [1,_B|_Bs], ..., [_I,_C|_Cs], ..., [_N,_D|_Ds] ]
+	def with_index &exe
+		i = 0
+		exe ||= Array.method :[]
+		push Collect.new {|*a| exe.call i, *a }
+	end
+
+	def slice n, &e
+		push Slice.new( n)
+		push Collect.new( &e)  if e
+		self
+	end
+
+	def cons n, &e
+		push Cons.new( n)
+		push Collect.new( &e)  if e
+		self
+	end
+
+	class Save < Base
+		attr_reader :db
+
+		def initialize db
+			@db = db
+		end
+
+		def call k, *v
+			@db[ k] = v.length == 1 ? v.first : v
+		end
+	end
+
+	def save db
+		push Save.new( db)
 	end
 end
-
-begin
-	require 'tokyocabinet'
-
-	class Functional
-		class Map <Base
-			class Emit < TokyoCabinet::BDB
-				alias emit putdup
-				alias call emit
-			end
-
-			def call *a
-				@exe.call( *a).each &@next
-			end
-		end
-
-		def map name, &e
-			push Map.new( name, &e)
-		end
-
-		def Reduce name, &e
-			push Reduce.new( name, &e)
-		end
-	end
-
-rescue MissingSourceFile
-	# TokyoCabinet not installed?
-end  if false
