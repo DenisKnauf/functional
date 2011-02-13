@@ -80,13 +80,20 @@ class Functional
 		end
 	end
 
+	class Tap <Base
+		def call *a
+			@exe.call *a
+			@next.call *a
+		end
+	end
+
 	class Select <Base
 		def call *a
 			@next.call *a  if @exe.call *a
 		end
 	end
 
-	class DeleteIf <Base
+	class Filter <Base
 		def call *a
 			@next.call *a  unless @exe.call *a
 		end
@@ -180,12 +187,12 @@ class Functional
 	end
 
 	class Flatten <Base
-		def call a
-			Array === a ? a.each( &method( :call)) : @next.call( a)
+		def call *a
+			a.each &@next.method( :call)
 		end
 	end
 
-	class Reduce <Base
+	class Inject <Base
 		def initialize iv, *a, &e
 			super *a, &e
 			@buf = {}
@@ -295,9 +302,10 @@ class Functional
 		push Map.new( &exe)
 	end
 
-	def reduce iv, &exe
-		push Reduce.new( iv, &exe)
+	def inject iv, &exe
+		push Inject.new( iv, &exe)
 	end
+	alias reduce inject
 
 	def select &exe
 		push Select.new( &exe)
@@ -307,8 +315,8 @@ class Functional
 		push Select.new( &re.method( :match))
 	end
 
-	def delete_if &exe
-		push DeleteIf.new( &exe)
+	def filter &exe
+		push Filter.new( &exe)
 	end
 
 	def compact
@@ -325,7 +333,6 @@ class Functional
 
 	def flatten &exe
 		push Flatten.new
-		push Collect.new( &exe)  if exe
 	end
 
 	def each &exe
