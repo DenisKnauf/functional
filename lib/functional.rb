@@ -192,7 +192,7 @@ class Functional
 		end
 	end
 
-	class Inject <Base
+	class Reduce <Base
 		def initialize iv, *a, &e
 			super *a, &e
 			@buf = {}
@@ -302,10 +302,9 @@ class Functional
 		push Map.new( &exe)
 	end
 
-	def inject iv, &exe
-		push Inject.new( iv, &exe)
+	def reduce iv, &exe
+		push Reduce.new( iv, &exe)
 	end
-	alias reduce inject
 
 	def select &exe
 		push Select.new( &exe)
