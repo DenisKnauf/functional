@@ -1,4 +1,3 @@
-
 class ::Regexp
 	class NegRegexp
 		def initialize r
@@ -193,10 +192,9 @@ class Functional
 	end
 
 	class Reduce <Base
-		def initialize iv, *a, &e
+		def initialize *a, &e
 			super *a, &e
-			@buf = {}
-			@buf.default = iv
+			@buf = Hash.new {|h,k| h[k] = []}
 		end
 
 		def call *a
@@ -302,8 +300,8 @@ class Functional
 		push Map.new( &exe)
 	end
 
-	def reduce iv, &exe
-		push Reduce.new( iv, &exe)
+	def reduce &exe
+		push Reduce.new( &exe)
 	end
 
 	def select &exe
