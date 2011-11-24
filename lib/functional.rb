@@ -49,16 +49,23 @@ end
 class Functional
 	include Enumerable
 
+	class DEFAULT
+	end
+
 	class Base
 		attr_reader :exe
 		attr_accessor :next
+		attr_reader :caller
+
 		def initialize &e
+			@caller = Kernel.caller.first
 			@exe = e
 		end
 
-		def call *a
+		def base_fun *a
 			@next.call *a
 		end
+		alias call base_fun
 
 		def end
 			@next.end
@@ -74,34 +81,39 @@ class Functional
 	end
 
 	class Collect <Base
-		def call *a
+		def collect_fun *a
 			@next.call *@exe.call( *a)
 		end
+		alias call collect_fun
 	end
 
 	class Tap <Base
-		def call *a
+		def tap_fun *a
 			@exe.call *a
 			@next.call *a
 		end
+		alias call tap_fun
 	end
 
 	class Select <Base
-		def call *a
+		def select_fun *a
 			@next.call *a  if @exe.call *a
 		end
+		alias call select_fun
 	end
 
 	class Filter <Base
-		def call *a
+		def filter_fun *a
 			@next.call *a  unless @exe.call *a
 		end
+		alias call filter_fun
 	end
 
 	class Compact <Base
-		def call *a
+		def compact_fun *a
 			@next.call *a  unless a.empty? || [nil] == a
 		end
+		alias call compact_fun
 	end
 
 	class BottomUp <Base
@@ -110,7 +122,7 @@ class Functional
 			@buffer, @start = nil, start
 		end
 
-		def call a
+		def bottom_up_fun a
 			if @exe.call a
 				@next.call @buffer+a
 				@buffer = @start.dup
@@ -118,6 +130,7 @@ class Functional
 				@buffer += a
 			end
 		end
+		alias call bottom_up_fun
 
 		def end
 			@next.call @buffer
@@ -131,7 +144,7 @@ class Functional
 			@buffer, @start = nil, start
 		end
 
-		def call a
+		def top_down_fun a
 			if @exe.call a
 				@next.call @buffer
 				@buffer = @start.dup+a
@@ -139,6 +152,7 @@ class Functional
 				@buffer += a
 			end
 		end
+		alias call top_down_fun
 
 		def end
 			@next.call @buffer
@@ -168,9 +182,10 @@ class Functional
 			@it = start
 		end
 
-		def call *a
+		def inject_fun *a
 			@it = @exe.call @it, *a
 		end
+		alias call inject_fun
 	end
 
 	class To_a <Inject
@@ -180,26 +195,36 @@ class Functional
 	end
 
 	class Map <Collect
-		def call *a
+		def map_fun *a
 			@exe.call *a, &@next
 		end
+		alias call map_fun
 	end
 
 	class Flatten <Base
-		def call *a
+		def flatten_fun *a
 			a.each &@next.method( :call)
 		end
+		alias call flatten_fun
 	end
 
 	class Reduce <Base
-		def initialize *a, &e
-			super *a, &e
-			@buf = Hash.new {|h,k| h[k] = []}
+		def initialize iv = ::Functional::DEFAULT, *a, &exe
+			super *a, &exe
+			iv = Array.method :new  if ::Functional::DEFAULT == iv
+			@buf = if iv.kind_of?( ::Proc) || iv.kind_of?( ::Method)
+					p default: :proc, iv: iv
+					Hash.new {|h,k| h[k] = iv.call }
+				else
+					p default: :value, iv: iv
+					{}.tap {|h| h.default = iv }
+				end
 		end
 
-		def call *a
+		def reduce_fun *a
 			@buf[ a[0]] = @exe.call @buf[ a[0]], *a[1..-1]
 		end
+		alias call reduce_fun
 
 		def end
 			@buf.each {|i| @next.call *i}
@@ -212,13 +237,14 @@ class Functional
 			@buf, @n = [], n
 		end
 
-		def call *a
+		def slice_fun *a
 			@buf.push a
 			unless @n > @buf.size
 				@next.call @buf
 				@buf.clear
 			end
 		end
+		alias call slice_fun
 
 		def end
 			@next.call @buf
@@ -231,7 +257,7 @@ class Functional
 			@buf, @n = [], n
 		end
 
-		def call *a
+		def cons_fun *a
 			@buf.push a
 		 	unless @n > @buf.size
 				class <<self
@@ -245,6 +271,7 @@ class Functional
 				@buf.shift
 			end
 		end
+		alias call cons_fun
 
 		def end
 			@next.call @buf  unless @n > @buf.size
@@ -267,9 +294,10 @@ class Functional
 			@pager.puts a.inspect
 		end
 
-		def call *a
+		def pager_fun *a
 			@pager.puts a
 		end
+		alias call pager_fun
 
 		def clean
 			@pager.close
@@ -300,8 +328,8 @@ class Functional
 		push Map.new( &exe)
 	end
 
-	def reduce &exe
-		push Reduce.new( &exe)
+	def reduce iv = ::Functional::DEFAULT, &exe
+		push Reduce.new( iv, &exe)
 	end
 
 	def select &exe
