@@ -47,6 +47,7 @@ class Counter
 end
 
 class Functional
+	def self.__version__() '0.1.4' end
 	include Enumerable
 
 	class DEFAULT
@@ -161,6 +162,11 @@ class Functional
 	end
 
 	class Each <Base
+		def each_fun *a
+			@exe.call *a
+		end
+		alias call each_fun
+
 		def end
 			nil
 		end
@@ -213,22 +219,39 @@ class Functional
 			super *a, &exe
 			iv = Array.method :new  if ::Functional::DEFAULT == iv
 			@buf = if iv.kind_of?( ::Proc) || iv.kind_of?( ::Method)
-					p default: :proc, iv: iv
 					Hash.new {|h,k| h[k] = iv.call }
 				else
-					p default: :value, iv: iv
 					{}.tap {|h| h.default = iv }
 				end
 		end
 
-		def reduce_fun *a
-			@buf[ a[0]] = @exe.call @buf[ a[0]], *a[1..-1]
+		def reduce_fun k, *a
+			@buf[ k] = @exe.call k, @buf[ k], *a
 		end
 		alias call reduce_fun
 
 		def end
-			@buf.each {|i| @next.call *i}
+			@buf.each &@next.method( :call)
 			@next.end
+		end
+	end
+
+	class ToHash <Base
+		def initialize
+			super
+			@buf = {}
+		end
+
+		def to_hash_fun k, *a
+			@buf[k] = a
+		end
+		alias call to_hash_fun
+
+		def end
+			@buf
+		end
+
+		def clean
 		end
 	end
 
@@ -343,6 +366,7 @@ class Functional
 	def filter &exe
 		push Filter.new( &exe)
 	end
+	alias reject filter
 
 	def compact
 		push Compact.new
@@ -362,8 +386,12 @@ class Functional
 
 	def each &exe
 		return self  unless exe
-		push Each.new
-		push exe
+		push Each.new( &exe)
+		run
+	end
+
+	def to_hash
+		push ToHash.new
 		run
 	end
 
@@ -402,19 +430,21 @@ class Functional
 	def with_index &exe
 		i = 0
 		exe ||= Array.method :[]
-		push Collect.new {|*a| exe.call i, *a }
+		push Collect.new {|*a| exe.call i, *a; i += 1 }
 	end
 
-	def slice n, &e
+	def slice n, &exe
 		push Slice.new( n)
-		push Collect.new( &e)  if e
-		self
+		block_given? ? self.collect( &exe) : self
 	end
 
-	def cons n, &e
+	def cons n, &exe
 		push Cons.new( n)
-		push Collect.new( &e)  if e
-		self
+		block_given? ? self.collect( &exe) : self
+	end
+
+	def tap &exe
+		push Tap.new( &exe)
 	end
 
 	class Save < Base
