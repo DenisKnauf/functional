@@ -47,7 +47,7 @@ class Counter
 end
 
 class Functional
-	def self.__version__() '0.1.4' end
+	def self.__version__() '0.1.5' end
 	include Enumerable
 
 	class DEFAULT
